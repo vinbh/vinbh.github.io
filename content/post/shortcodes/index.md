@@ -1,41 +1,65 @@
 ---
-title: Shortcodes
-description: Useful shortcodes that can be used in Markdown
+title: My Tech & Gaming Journey
+description: From code commits to achievement unlocks - exploring the digital frontier
 date: 2023-08-25 00:00:00+0000
 image: cover.jpg
 ---
 
-For more details, check out the [documentation](https://stack.jimmycai.com/writing/shortcodes).
+## Latest Gaming Adventures
 
-## Bilibili video
+I've been diving deep into some incredible games lately. Whether it's mastering raid mechanics or exploring vast open worlds, gaming has always been my perfect balance to coding sessions.
 
-{{< bilibili "BV1d4411N7zD" >}}
+### Current Favorites
+- Exploring the depths of Palworld's crafting system
+- Competitive matches in Valorant
+- Building automation systems in Factorio
 
-## Tencent video
+### Currently Playing
+- **Red Dead Redemption 2:** Riding the frontier and rewriting my own legend.
+- **Age of Empires III:** Commanding ancient armies like a modern-day general.
+- **Assassin's Creed Odyssey:** Embarking on mythic quests through ancient worlds.
+- **Sniper Elite: Resistance:** Sharpening my sniper skills with every covert mission.
 
-{{< tencent "g0014r3khdw" >}}
+## Tech Projects & Learnings
 
-## YouTube video
+### Current Stack
+I'm currently working with:
+- Backend: Go, Python
+- Frontend: Duh!
+- DevOps: Docker, Kubernetes, o11y
+- Cloud: AWS
 
-{{< youtube "0qwALOOvUik" >}}
+### Recent Discoveries
+Found some amazing tools that have revolutionized my workflow:
+- Neovim for lightning-fast code editing
+- Docker Compose for local development
+- GitHub Copilot for pair programming with AI
 
-## Generic video file
+## Weekly Tech Tips
 
-{{< video "https://www.w3schools.com/tags/movie.mp4" >}}
+Here's a useful Git trick I discovered recently:
 
-## Gist
+```bash
+git config --global alias.undo 'reset --soft HEAD~1'
+```
 
-{{< gist vinbh e2751a943de10b2a5b3a8a6c2120cb86 >}}
+Now you can undo your last commit with `git undo`!
 
-## GitLab
+## Gaming Setup
 
-{{< gitlab 2589724 >}}
+My current battle station:
+- CPU: AMD Ryzen 9 3900x
+- GPU: NVIDIA RTX 4090
+- RAM: 64GB DDR4
+- Display: 27" 1440p 144Hz and 4K OLED 55"
+ 
+## What's Next?
 
-## Quote
-
-{{< quote author="A famous person" source="The book they wrote" url="https://en.wikipedia.org/wiki/Book">}}
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-{{< /quote >}}
+Stay tuned for:
+- Deep dives into system design
+- Game performance optimization guides
+- Weekly coding challenges
+- Gaming achievement guides
 
 -----
 
