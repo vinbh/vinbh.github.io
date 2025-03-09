@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Vinbh's Tech &amp; Gaming Hub on vinbh</title><link>https://vinbh.github.io/</link><description>Recent content in Vinbh's Tech &amp; Gaming Hub on vinbh</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Sat, 09 Mar 2024 00:00:00 +0000</lastBuildDate><atom:link href="https://vinbh.github.io/index.xml" rel="self" type="application/rss+xml"/><item><title>Welcome to My Digital Playground</title><link>https://vinbh.github.io/p/hello-world/</link><pubDate>Fri, 08 Mar 2024 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/p/hello-world/</guid><description>&lt;img src="https://vinbh.github.io/p/hello-world/cover.jpg" alt="Featured image of post Welcome to My Digital Playground" />&lt;p>Hey there! Welcome to my corner of the internet. I&amp;rsquo;m Vinbh, a tech enthusiast and avid gamer who loves to explore the intersection of technology and gaming. This blog is where I&amp;rsquo;ll share my adventures in both worlds - from debugging production issues to conquering virtual realms.&lt;/p>
+&lt;h2 id="what-to-expect-here">&lt;a href="#what-to-expect-here" class="header-anchor">&lt;/a>What to Expect Here
+&lt;/h2>&lt;ul>
+&lt;li>🖥️ &lt;strong>Tech Deep Dives&lt;/strong>: Exploring software engineering, DevOps practices, and system architecture&lt;/li>
+&lt;li>🎮 &lt;strong>Gaming Adventures&lt;/strong>: Reviews, strategies, and stories from my gaming sessions&lt;/li>
+&lt;li>🛠️ &lt;strong>Setup Guides&lt;/strong>: Optimizing both development and gaming environments&lt;/li>
+&lt;li>💡 &lt;strong>Tips &amp;amp; Tricks&lt;/strong>: Useful shortcuts and life hacks for developers and gamers&lt;/li>
+&lt;/ul>
+&lt;p>Stay tuned for regular updates on my latest projects, gaming achievements, and technical discoveries. Whether you&amp;rsquo;re here for the code or the games (or both!), I hope you&amp;rsquo;ll find something interesting.&lt;/p>
+&lt;p>Remember: Always outnumbered, never outgunned! 🚀&lt;/p>
+&lt;blockquote>
+&lt;p>&amp;ldquo;In code we trust, in games we must.&amp;rdquo;&lt;/p>&lt;/blockquote></description></item><item><title>The Choreography of Packets: How TCP/IP Actually Works</title><link>https://vinbh.github.io/p/the-choreography-of-packets-how-tcp/ip-actually-works/</link><pubDate>Sat, 09 Mar 2024 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/p/the-choreography-of-packets-how-tcp/ip-actually-works/</guid><description>&lt;p>I still remember my first encounter with TCP/IP back in the early 2014. Trying to debug why my game was lagging, I stumbled upon a world of packets, acknowledgments, and sequence numbers that seemed impenetrable at first. Years later, I&amp;rsquo;ve come to appreciate the elegant dance that happens beneath our everyday internet experience. Let me guide you through it.&lt;/p>
+&lt;h2 id="beyond-the-buzzwords-tcp-and-ip-unwrapped">&lt;a href="#beyond-the-buzzwords-tcp-and-ip-unwrapped" class="header-anchor">&lt;/a>Beyond the Buzzwords: TCP and IP Unwrapped
+&lt;/h2>&lt;p>When we talk about &amp;ldquo;TCP/IP,&amp;rdquo; we&amp;rsquo;re really discussing two distinct protocols working in tandem. IP (Internet Protocol) handles the addressing and routing—essentially determining &lt;em>where&lt;/em> packets should go. TCP (Transmission Control Protocol) ensures reliability, handling the &lt;em>how&lt;/em> of data transmission.&lt;/p>
+&lt;p>IP is like the postal service&amp;rsquo;s infrastructure—addresses, sorting facilities, and delivery routes. TCP is more like certified mail with tracking, receipt confirmation, and guaranteed delivery. One without the other leaves you with either a reliable system that can&amp;rsquo;t find its destination or excellent routing with no guarantees of delivery.&lt;/p>
+&lt;h2 id="the-famous-three-way-handshake">&lt;a href="#the-famous-three-way-handshake" class="header-anchor">&lt;/a>The Famous Three-Way Handshake
+&lt;/h2>&lt;p>Before a single byte of your cat video or important business document traverses the internet, TCP performs an elaborate greeting ritual known as the three-way handshake.&lt;/p>
+&lt;pre>&lt;code>Your Browser Web Server
+| |
+| SYN (seq=42) |
+| --------------------------→ | &amp;quot;Hello, I'd like to talk.
+| | My reference number is 42.&amp;quot;
+| |
+| SYN-ACK (seq=100,ack=43) |
+| ←--------------------------- | &amp;quot;I hear you! Your ref is 42+1,
+| | mine is 100.&amp;quot;
+| |
+| ACK (ack=101) |
+| --------------------------→ | &amp;quot;Got it! Let's start talking!&amp;quot;
+| |
+&lt;/code>&lt;/pre>
+&lt;p>Connection Established Connection Established&lt;/p>
+&lt;p>What&amp;rsquo;s fascinating here isn&amp;rsquo;t just the mechanical exchange, but the implied vulnerability. When your device sends that initial SYN packet, it allocates memory and resources in anticipation of the connection. This became the basis for the infamous SYN flood attacks that brought down major websites in the late 1990s—attackers would send thousands of SYN packets with no intention of completing the handshake, exhausting server resources.&lt;/p>
+&lt;h2 id="tcps-cautious-congestion-control">&lt;a href="#tcps-cautious-congestion-control" class="header-anchor">&lt;/a>TCP&amp;rsquo;s Cautious Congestion Control
+&lt;/h2>&lt;p>One aspect of TCP that continues to amaze me is its inherent caution. Unlike humans who often dive headfirst into situations, TCP approaches network capacity with remarkable restraint through its slow-start mechanism.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"> ┌─────────────────┐
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Connection │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Starts │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> └────────┬────────┘
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ▼
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ┌─────────────────┐
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Initial cwnd = │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ 10 segments │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> └────────┬────────┘
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ▼
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ┌─────────────────┐ No ┌─────────────────┐
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Acknowledgments ├────────────────────► Timeout, Reset │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Received? │ └────────┬────────┘
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> └────────┬────────┘ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Yes │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ▼ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ┌─────────────────┐ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Double cwnd │ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> └────────┬────────┘ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ▼ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ┌─────────────────┐ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Packet Loss │ Yes │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Detected? ├─────────────────┐ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> └────────┬────────┘ │ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ No ▼ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ ┌─────────────────┐ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> └──────────────────► Cut cwnd in half├─┘
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> └─────────────────┘
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>I once debugged a strange performance issue where file transfers would start slowly and then suddenly accelerate after a few seconds. The culprit? TCP&amp;rsquo;s slow-start algorithm doing exactly what it should—cautiously probing the network&amp;rsquo;s capacity before ramping up.&lt;/p>
+&lt;p>Initial congestion window sizes have evolved over time. The original TCP specifications suggested starting with just 1 segment, but modern implementations typically use 10 segments (about 14KB). This evolution reflects our changing networks—from the fragile early internet to today&amp;rsquo;s robust infrastructure.&lt;/p>
+&lt;h2 id="the-throughput-equation-nobody-tells-you-about">&lt;a href="#the-throughput-equation-nobody-tells-you-about" class="header-anchor">&lt;/a>The Throughput Equation Nobody Tells You About
+&lt;/h2>&lt;p>Here&amp;rsquo;s something I rarely see discussed outside academic papers: the TCP throughput is fundamentally limited by an equation relating packet loss, round-trip time, and maximum segment size:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">Max Throughput ≈ (MSS/RTT) * (1/√p)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Where:&lt;/p>
+&lt;ul>
+&lt;li>MSS = Maximum Segment Size&lt;/li>
+&lt;li>RTT = Round Trip Time&lt;/li>
+&lt;li>p = Packet loss probability&lt;/li>
+&lt;/ul>
+&lt;p>This equation shocked me when I first encountered it. A mere 0.1% packet loss can dramatically limit throughput on high-latency connections. This is why your video call to Australia stutters even with a &amp;ldquo;fast&amp;rdquo; internet connection—physics and mathematics conspire against you.&lt;/p>
+&lt;h2 id="tcp-fast-open-skipping-the-formalities">&lt;a href="#tcp-fast-open-skipping-the-formalities" class="header-anchor">&lt;/a>TCP Fast Open: Skipping the Formalities
+&lt;/h2>&lt;p>Anyone who&amp;rsquo;s worked with high-frequency API calls knows the pain of TCP connection overhead. TCP Fast Open (TFO) addresses this by allowing data transmission during the initial handshake.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"> Client Server
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | SYN + TFO Cookie + DATA |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | ---------------------------→ |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | SYN-ACK + ACK(DATA) + DATA |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | ←--------------------------- |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | ACK |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | ---------------------------→ |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | Data exchange already started!
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>I&amp;rsquo;ve seen this reduce page load times by 10-15% for API-heavy applications—not revolutionary, but those milliseconds add up to a noticeably smoother user experience.&lt;/p>
+&lt;h2 id="the-practical-side-tcp-tuning-tools">&lt;a href="#the-practical-side-tcp-tuning-tools" class="header-anchor">&lt;/a>The Practical Side: TCP Tuning Tools
+&lt;/h2>&lt;p>After years of wrestling with network performance, I&amp;rsquo;ve accumulated a toolkit for TCP diagnosis and tuning:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># See your current TCP settings&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sysctl net.ipv4.tcp_*
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Watch TCP connections in real-time&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">ss -tunap
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Capture and analyze TCP flows&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">tcpdump -i eth0 -nn &lt;span class="s1">&amp;#39;tcp port 80&amp;#39;&lt;/span> -w capture.pcap
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Modern Linux distributions have sane defaults, but in specific scenarios (high-bandwidth, high-latency links), tweaking parameters like &lt;code>tcp_rmem&lt;/code> and &lt;code>tcp_wmem&lt;/code> can yield significant improvements. I once doubled throughput on a transpacific link just by adjusting these buffers.&lt;/p>
+&lt;h2 id="when-tcp-shows-its-age">&lt;a href="#when-tcp-shows-its-age" class="header-anchor">&lt;/a>When TCP Shows Its Age
+&lt;/h2>&lt;p>Despite its elegance, TCP was designed in a different era. Its conservative approach can be detrimental in certain scenarios:&lt;/p>
+&lt;ol>
+&lt;li>&lt;strong>Mobile networks&lt;/strong> with rapidly changing conditions confuse TCP&amp;rsquo;s congestion algorithms&lt;/li>
+&lt;li>&lt;strong>Short-lived connections&lt;/strong> (like API calls) barely escape slow-start before terminating&lt;/li>
+&lt;li>&lt;strong>High bandwidth-delay product paths&lt;/strong> struggle to utilize available capacity&lt;/li>
+&lt;/ol>
+&lt;p>This is why Google developed QUIC (which evolved into HTTP/3), employing UDP as a foundation and reimplementing reliability mechanisms with modern networks in mind.&lt;/p>
+&lt;h2 id="conclusion-the-invisible-orchestra">&lt;a href="#conclusion-the-invisible-orchestra" class="header-anchor">&lt;/a>Conclusion: The Invisible Orchestra
+&lt;/h2>&lt;p>What fascinates me most about TCP/IP isn&amp;rsquo;t just its technical intricacies, but how it embodies certain values: caution, fairness, reliability, and adaptability. When billions of devices run these protocols, they create an invisible orchestra of give-and-take that allows our global network to function.&lt;/p>
+&lt;p>Next time your browser loads a page, picture those SYN packets setting off on their journey, the careful dance of slow-start packets testing the network&amp;rsquo;s limits, and the congestion avoidance algorithms ensuring everyone gets their fair share of the pipe.&lt;/p>
+&lt;p>Understanding TCP/IP isn&amp;rsquo;t just technical knowledge—it&amp;rsquo;s appreciating the digital social contract that makes our connected world possible.&lt;/p>
+&lt;hr>
+&lt;p>&lt;em>Do you have questions about TCP/IP or network performance? Drop a comment below—I&amp;rsquo;m always up for a good networking discussion!&lt;/em>&lt;/p>
+&lt;blockquote>
+&lt;p>Reference: For more in-depth details, please refer to Chapter 2 of &lt;em>High Performance Browser Networking&lt;/em> by Ilya Grigorik.&lt;/p>&lt;/blockquote></description></item><item><title>Video Gallery</title><link>https://vinbh.github.io/p/video-gallery/</link><pubDate>Fri, 08 Mar 2024 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/p/video-gallery/</guid><description>&lt;h2 id="gaming-highlights">&lt;a href="#gaming-highlights" class="header-anchor">&lt;/a>Gaming Highlights
+&lt;/h2>&lt;h3 id="epic-gaming-moments">&lt;a href="#epic-gaming-moments" class="header-anchor">&lt;/a>Epic Gaming Moments
+&lt;/h3>&lt;p>&lt;div class="video-wrapper">
+&lt;iframe loading="lazy"
+src="https://www.youtube.com/embed/HrS_trkkHLk?si=aoVOpskiGgKNzQ5T"
+allowfullscreen
+title="YouTube Video"
+>
+&lt;/iframe>
+&lt;/div>
+&lt;em>Some PUBG PC fun!!&lt;/em>&lt;/p>
+&lt;h3 id="game-reviews--first-impressions">&lt;a href="#game-reviews--first-impressions" class="header-anchor">&lt;/a>Game Reviews &amp;amp; First Impressions
+&lt;/h3>&lt;p>&lt;div class="video-wrapper">
+&lt;iframe loading="lazy"
+src="https://www.youtube.com/embed/yYHUkWTzKRg"
+allowfullscreen
+title="YouTube Video"
+>
+&lt;/iframe>
+&lt;/div>
+&lt;em>FarCry4 Yeti vs 50BMG!&lt;/em>&lt;/p>
+&lt;h2 id="tech-content">&lt;a href="#tech-content" class="header-anchor">&lt;/a>Tech Content
+&lt;/h2>&lt;hr></description></item><item><title>My Tech &amp; Gaming Journey</title><link>https://vinbh.github.io/p/my-tech-gaming-journey/</link><pubDate>Fri, 25 Aug 2023 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/p/my-tech-gaming-journey/</guid><description>&lt;img src="https://vinbh.github.io/p/my-tech-gaming-journey/cover.jpg" alt="Featured image of post My Tech &amp; Gaming Journey" />&lt;h2 id="latest-gaming-adventures">&lt;a href="#latest-gaming-adventures" class="header-anchor">&lt;/a>Latest Gaming Adventures
+&lt;/h2>&lt;p>I&amp;rsquo;ve been diving deep into some incredible games lately. Whether it&amp;rsquo;s mastering raid mechanics or exploring vast open worlds, gaming has always been my perfect balance to coding sessions.&lt;/p>
+&lt;h3 id="current-favorites">&lt;a href="#current-favorites" class="header-anchor">&lt;/a>Current Favorites
+&lt;/h3>&lt;ul>
+&lt;li>Exploring the depths of Palworld&amp;rsquo;s crafting system&lt;/li>
+&lt;li>Competitive matches in Valorant&lt;/li>
+&lt;li>Building automation systems in Factorio&lt;/li>
+&lt;/ul>
+&lt;h3 id="currently-playing">&lt;a href="#currently-playing" class="header-anchor">&lt;/a>Currently Playing
+&lt;/h3>&lt;ul>
+&lt;li>&lt;strong>Red Dead Redemption 2:&lt;/strong> Riding the frontier and rewriting my own legend.&lt;/li>
+&lt;li>&lt;strong>Age of Empires III:&lt;/strong> Commanding ancient armies like a modern-day general.&lt;/li>
+&lt;li>&lt;strong>Assassin&amp;rsquo;s Creed Odyssey:&lt;/strong> Embarking on mythic quests through ancient worlds.&lt;/li>
+&lt;li>&lt;strong>Sniper Elite: Resistance:&lt;/strong> Sharpening my sniper skills with every covert mission.&lt;/li>
+&lt;/ul>
+&lt;h2 id="tech-projects--learnings">&lt;a href="#tech-projects--learnings" class="header-anchor">&lt;/a>Tech Projects &amp;amp; Learnings
+&lt;/h2>&lt;h3 id="current-stack">&lt;a href="#current-stack" class="header-anchor">&lt;/a>Current Stack
+&lt;/h3>&lt;p>I&amp;rsquo;m currently working with:&lt;/p>
+&lt;ul>
+&lt;li>Backend: Go, Python&lt;/li>
+&lt;li>Frontend: Duh!&lt;/li>
+&lt;li>DevOps: Docker, Kubernetes, o11y&lt;/li>
+&lt;li>Cloud: AWS&lt;/li>
+&lt;/ul>
+&lt;h3 id="recent-discoveries">&lt;a href="#recent-discoveries" class="header-anchor">&lt;/a>Recent Discoveries
+&lt;/h3>&lt;p>Found some amazing tools that have revolutionized my workflow:&lt;/p>
+&lt;ul>
+&lt;li>Neovim for lightning-fast code editing&lt;/li>
+&lt;li>Docker Compose for local development&lt;/li>
+&lt;li>GitHub Copilot for pair programming with AI&lt;/li>
+&lt;/ul>
+&lt;h2 id="weekly-tech-tips">&lt;a href="#weekly-tech-tips" class="header-anchor">&lt;/a>Weekly Tech Tips
+&lt;/h2>&lt;p>Here&amp;rsquo;s a useful Git trick I discovered recently:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">git config --global alias.undo &lt;span class="s1">&amp;#39;reset --soft HEAD~1&amp;#39;&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Now you can undo your last commit with &lt;code>git undo&lt;/code>!&lt;/p>
+&lt;h2 id="gaming-setup">&lt;a href="#gaming-setup" class="header-anchor">&lt;/a>Gaming Setup
+&lt;/h2>&lt;p>My current battle station:&lt;/p>
+&lt;ul>
+&lt;li>CPU: AMD Ryzen 9 3900x&lt;/li>
+&lt;li>GPU: NVIDIA RTX 4090&lt;/li>
+&lt;li>RAM: 64GB DDR4&lt;/li>
+&lt;li>Display: 27&amp;quot; 1440p 144Hz and 4K OLED 55&amp;quot;&lt;/li>
+&lt;/ul>
+&lt;h2 id="whats-next">&lt;a href="#whats-next" class="header-anchor">&lt;/a>What&amp;rsquo;s Next?
+&lt;/h2>&lt;p>Stay tuned for:&lt;/p>
+&lt;ul>
+&lt;li>Deep dives into system design&lt;/li>
+&lt;li>Game performance optimization guides&lt;/li>
+&lt;li>Weekly coding challenges&lt;/li>
+&lt;li>Gaming achievement guides&lt;/li>
+&lt;/ul>
+&lt;hr>
+&lt;blockquote>
+&lt;p>Photo by &lt;a class="link" href="https://unsplash.com/@codioful" target="_blank" rel="noopener"
+>Codioful&lt;/a> on &lt;a class="link" href="https://unsplash.com/photos/WDSN62Qdxuk" target="_blank" rel="noopener"
+>Unsplash&lt;/a>&lt;/p>&lt;/blockquote></description></item><item><title>Archives</title><link>https://vinbh.github.io/archives/</link><pubDate>Sun, 06 Mar 2022 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/archives/</guid><description/></item><item><title>Links</title><link>https://vinbh.github.io/links/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/links/</guid><description>&lt;p>To use this feature, add &lt;code>links&lt;/code> section to frontmatter.&lt;/p>
+&lt;p>This page&amp;rsquo;s frontmatter:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;span class="lnt">9
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="line">&lt;span class="cl">&lt;span class="nt">links&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="nt">title&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">GitHub&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">description&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">GitHub is the world&amp;#39;s largest software development platform.&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">website&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">https://github.com&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">image&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="nt">title&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">TypeScript&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">description&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">TypeScript is a typed superset of JavaScript that compiles to plain JavaScript.&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">website&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">https://www.typescriptlang.org&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">image&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">ts-logo-128.jpg&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>&lt;code>image&lt;/code> field accepts both local and external images.&lt;/p></description></item><item><title>Search</title><link>https://vinbh.github.io/search/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/search/</guid><description/></item></channel></rss>
