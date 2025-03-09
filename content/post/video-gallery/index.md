@@ -2,7 +2,7 @@
 title: Video Gallery
 description: My Favorite Tech & Gaming Content Collection
 date: 2024-03-08 00:00:00+0000
-image: 2.jpg
+
 ---
 
 ## Gaming Highlights
