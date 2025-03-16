@@ -1,7 +1,7 @@
 ---
 title: "Breaking the Lock: How SREs Can Prevent Scalability Collapse and Keep Systems Blazing Fast"
 description: "Lessons for SREs"
-date: 2025-03-10
+date: 2025-03-15
 weight: 2
 categories: [ "SRE", "Scalability", "Concurrency", "Locks", "PerformanceOptimization", "CloudComputing", "DevOps", "SiteReliabilityEngineering", "HighPerformanceComputing"]
 tags: ["Observability", "Threading", "NUMA", "Kubernetes", "Microservices","Latency", "Reliability", "DistributedSystems", "SystemDesign","SRE", "Scalability", "Concurrency", "Locks", "PerformanceOptimization"]
