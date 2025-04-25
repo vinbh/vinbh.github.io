@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>C on vinbh</title><link>https://vinbh.github.io/tags/c/</link><description>Recent content in C on vinbh</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 25 Apr 2025 00:00:00 +0000</lastBuildDate><atom:link href="https://vinbh.github.io/tags/c/index.xml" rel="self" type="application/rss+xml"/><item><title>Demystifying the *Unkillable* Process in Linux —with a Little Help from Python</title><link>https://vinbh.github.io/p/demystifying-the-unkillable-process-in-linux-with-a-little-help-from-python/</link><pubDate>Fri, 25 Apr 2025 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/p/demystifying-the-unkillable-process-in-linux-with-a-little-help-from-python/</guid><description>&lt;h1 id="demystifying-the-unkillable-process-in-linuxwith-a-little-help-from-python">&lt;a href="#demystifying-the-unkillable-process-in-linuxwith-a-little-help-from-python" class="header-anchor">&lt;/a>Demystifying the &lt;em>Unkillable&lt;/em> Process in Linux —with a Little Help from Python
+&lt;/h1>&lt;blockquote>
+&lt;p>&lt;strong>TL;DR&lt;/strong>&lt;br>
+&lt;code>SIGKILL&lt;/code> and &lt;code>SIGSTOP&lt;/code> are meant to be final, but three kernel pathways let a task survive:&lt;/p>
+&lt;ol>
+&lt;li>The process’s &lt;code>SIGNAL_UNKILLABLE&lt;/code> flag is set (PID 1 has this by default).&lt;/li>
+&lt;li>The thread is stuck in an uninterruptible sleep (&lt;code>D&lt;/code> state) while inside the kernel.&lt;/li>
+&lt;li>A tracer, cgroup freezer, or rogue kernel module silently drops or delays the signal.&lt;/li>
+&lt;/ol>
+&lt;p>Below we’ll &lt;strong>reproduce the first case&lt;/strong> with a 25‑line kernel module driven by Python, then learn to spot the other two cases with pure Python.&lt;/p>&lt;/blockquote>
+&lt;hr>
+&lt;h2 id="1why-sigkill-ought-to-win">&lt;a href="#1why-sigkill-ought-to-win" class="header-anchor">&lt;/a>1  Why &lt;code>SIGKILL&lt;/code> &lt;em>ought&lt;/em> to win
+&lt;/h2>&lt;ul>
+&lt;li>In the Linux &lt;code>signal(7)&lt;/code> manual, &lt;strong>&lt;code>SIGKILL (9)&lt;/code>&lt;/strong> and &lt;strong>&lt;code>SIGSTOP (19)&lt;/code>&lt;/strong> are marked “cannot be caught, blocked, or ignored.”&lt;/li>
+&lt;li>Delivery can fail only when
+&lt;ul>
+&lt;li>the caller lacks permission (&lt;code>kill()&lt;/code> returns &lt;code>EPERM&lt;/code>), &lt;strong>or&lt;/strong>&lt;/li>
+&lt;li>the target’s &lt;code>signal_struct→flags&lt;/code> carries the bit &lt;strong>&lt;code>SIGNAL_UNKILLABLE&lt;/code>&lt;/strong>.&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;p>The kernel grants that flag to the very first userspace task (PID 1) so the system can’t kill its own &lt;em>init&lt;/em>.&lt;/p>
+&lt;hr>
+&lt;h2 id="2flipping-signal_unkillable-build-an-immortal-process">&lt;a href="#2flipping-signal_unkillable-build-an-immortal-process" class="header-anchor">&lt;/a>2  Flipping &lt;code>SIGNAL_UNKILLABLE&lt;/code>: build an “immortal” process
+&lt;/h2>&lt;blockquote>
+&lt;p>⚠️ &lt;strong>Run in a throw‑away VM or container.&lt;/strong>&lt;br>
+Once a PID is flagged unkillable, only a reboot or voluntary exit clears it.&lt;/p>&lt;/blockquote>
+&lt;h3 id="21the-25line-kernel-moduleunkillablec">&lt;a href="#21the-25line-kernel-moduleunkillablec" class="header-anchor">&lt;/a>2.1  The 25‑line kernel module &lt;code>unkillable.c&lt;/code>
+&lt;/h3>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-c" data-lang="c">&lt;span class="line">&lt;span class="cl">&lt;span class="c1">// compile with: make &amp;amp;&amp;amp; sudo insmod unkillable.ko
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/module.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/fs.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/pid.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/sched/signal.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#define DEV &amp;#34;unkillable&amp;#34;
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">static&lt;/span> &lt;span class="kt">ssize_t&lt;/span> &lt;span class="nf">flip&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="n">file&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">f&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="kt">char&lt;/span> &lt;span class="n">__user&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">u&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="kt">size_t&lt;/span> &lt;span class="n">pid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="kt">loff_t&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">o&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">struct&lt;/span> &lt;span class="n">pid&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">p&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="nf">find_get_pid&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">p&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">struct&lt;/span> &lt;span class="n">task_struct&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">t&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="nf">pid_task&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">p&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">PIDTYPE_PID&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">t&lt;/span> &lt;span class="o">&amp;amp;&amp;amp;&lt;/span> &lt;span class="n">t&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">signal&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">t&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">signal&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">flags&lt;/span> &lt;span class="o">|=&lt;/span> &lt;span class="n">SIGNAL_UNKILLABLE&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="cm">/* 🔑 magic */&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">put_pid&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">p&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="cm">/* “read” zero bytes — side‑effect only */&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">static&lt;/span> &lt;span class="k">const&lt;/span> &lt;span class="k">struct&lt;/span> &lt;span class="n">file_operations&lt;/span> &lt;span class="n">fops&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">{&lt;/span> &lt;span class="p">.&lt;/span>&lt;span class="n">read&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">flip&lt;/span> &lt;span class="p">};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">static&lt;/span> &lt;span class="kt">int&lt;/span> &lt;span class="n">__init&lt;/span> &lt;span class="nf">init&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="nf">register_chrdev&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">117&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">DEV&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">fops&lt;/span>&lt;span class="p">);&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">static&lt;/span> &lt;span class="kt">void&lt;/span> &lt;span class="n">__exit&lt;/span> &lt;span class="nf">exit&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span> &lt;span class="nf">unregister_chrdev&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">117&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">DEV&lt;/span>&lt;span class="p">);&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">module_init&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">init&lt;/span>&lt;span class="p">);&lt;/span> &lt;span class="nf">module_exit&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">exit&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">MODULE_LICENSE&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;GPL&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>&lt;strong>Makefile&lt;/strong>&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-makefile" data-lang="makefile">&lt;span class="line">&lt;span class="cl">&lt;span class="nv">obj-m&lt;/span> &lt;span class="o">+=&lt;/span> unkillable.o
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">all&lt;/span>&lt;span class="o">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> make -C /lib/modules/&lt;span class="k">$(&lt;/span>shell uname -r&lt;span class="k">)&lt;/span>/build &lt;span class="nv">M&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="k">$(&lt;/span>PWD&lt;span class="k">)&lt;/span> modules
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">clean&lt;/span>&lt;span class="o">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> make -C /lib/modules/&lt;span class="k">$(&lt;/span>shell uname -r&lt;span class="k">)&lt;/span>/build &lt;span class="nv">M&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="k">$(&lt;/span>PWD&lt;span class="k">)&lt;/span> clean
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Build &amp;amp; load:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ make
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ sudo insmod unkillable.ko
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ sudo mknod /dev/unkillable c &lt;span class="m">117&lt;/span> &lt;span class="m">0&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ sudo chmod &lt;span class="m">666&lt;/span> /dev/unkillable
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h3 id="22python-driverimmortalpy">&lt;a href="#22python-driverimmortalpy" class="header-anchor">&lt;/a>2.2  Python driver &lt;code>immortal.py&lt;/code>
+&lt;/h3>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="ch">#!/usr/bin/env python3&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kn">import&lt;/span> &lt;span class="nn">os&lt;/span>&lt;span class="o">,&lt;/span> &lt;span class="nn">time&lt;/span>&lt;span class="o">,&lt;/span> &lt;span class="nn">ctypes&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">pid&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">os&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">getpid&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">print&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="sa">f&lt;/span>&lt;span class="s2">&amp;#34;My PID is &lt;/span>&lt;span class="si">{&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">fd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">os&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">open&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;/dev/unkillable&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">os&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">O_RDONLY&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># read()’s *count* parameter is treated as the target PID by the driver&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">ctypes&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">CDLL&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="kc">None&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">read&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">fd&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">ctypes&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">c_char_p&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="n">pid&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">print&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="sa">f&lt;/span>&lt;span class="s2">&amp;#34;SIGNAL_UNKILLABLE flag set — hit me with `sudo kill -9 &lt;/span>&lt;span class="si">{&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">`&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">while&lt;/span> &lt;span class="kc">True&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">time&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">sleep&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Run it:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ python3 immortal.py
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">My PID is &lt;span class="m">44201&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">SIGNAL_UNKILLABLE flag &lt;span class="nb">set&lt;/span> — hit me with &lt;span class="sb">`&lt;/span>sudo &lt;span class="nb">kill&lt;/span> -9 44201&lt;span class="sb">`&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h3 id="23shell-test-kill-9-that-fails">&lt;a href="#23shell-test-kill-9-that-fails" class="header-anchor">&lt;/a>2.3  Shell test: &lt;code>kill -9&lt;/code> that &lt;em>fails&lt;/em>
+&lt;/h3>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># second terminal&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ sudo &lt;span class="nb">kill&lt;/span> -9 &lt;span class="m">44201&lt;/span> &lt;span class="c1"># exit‑status 0, signal accepted…&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ps -p &lt;span class="m">44201&lt;/span> -o pid,stat,cmd
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> PID STAT CMD
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="m">44201&lt;/span> S python3 immortal.py &lt;span class="c1"># …but the process is still alive&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>The kernel discarded the signal before delivery, so the task keeps running.&lt;/p>
+&lt;hr>
+&lt;h2 id="3diagnosing-stubborn-pids-with-pure-python">&lt;a href="#3diagnosing-stubborn-pids-with-pure-python" class="header-anchor">&lt;/a>3  Diagnosing stubborn PIDs with pure Python
+&lt;/h2>&lt;p>Most production “unkillables” aren’t flagged; they’re &lt;strong>stuck inside the kernel&lt;/strong>.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;span class="lnt">9
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="kn">import&lt;/span> &lt;span class="nn">psutil&lt;/span>&lt;span class="o">,&lt;/span> &lt;span class="nn">signal&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">for&lt;/span> &lt;span class="n">p&lt;/span> &lt;span class="ow">in&lt;/span> &lt;span class="n">psutil&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">process_iter&lt;/span>&lt;span class="p">([&lt;/span>&lt;span class="s1">&amp;#39;pid&amp;#39;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s1">&amp;#39;name&amp;#39;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s1">&amp;#39;status&amp;#39;&lt;/span>&lt;span class="p">]):&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="n">p&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">status&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="n">psutil&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">STATUS_DISK_SLEEP&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="c1"># ’D’ state&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">print&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;Blocked:&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">p&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">p&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">name&lt;/span>&lt;span class="p">())&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">try&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">p&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">send_signal&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">signal&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">SIGKILL&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">except&lt;/span> &lt;span class="n">psutil&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">AccessDenied&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">print&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34; EPERM — different UID or namespace?&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;ul>
+&lt;li>&lt;code>STATUS_DISK_SLEEP&lt;/code> corresponds to kernel &lt;code>TASK_UNINTERRUPTIBLE&lt;/code>.&lt;br>
+&lt;code>SIGKILL&lt;/code> is queued but won’t run until the I/O finishes.&lt;/li>
+&lt;li>&lt;code>psutil.AccessDenied&lt;/code> (or &lt;code>kill -0 PID&lt;/code> → &lt;code>EPERM&lt;/code>) means you’re outside the target’s UID or PID namespace.&lt;/li>
+&lt;/ul>
+&lt;hr>
+&lt;h2 id="4pid1-quirks-host--containers">&lt;a href="#4pid1-quirks-host--containers" class="header-anchor">&lt;/a>4  PID 1 quirks (host &amp;amp; containers)
+&lt;/h2>&lt;ul>
+&lt;li>&lt;strong>Global PID 1&lt;/strong> is born with &lt;code>SIGNAL_UNKILLABLE&lt;/code>; &lt;code>kill -9 1&lt;/code> returns &lt;code>EPERM&lt;/code>.&lt;/li>
+&lt;li>In containers, the entry‑point becomes PID 1 &lt;em>in that namespace&lt;/em> and inherits the same immunity.&lt;br>
+&lt;strong>Fix:&lt;/strong> run your app under a mini‑init such as &lt;code>tini&lt;/code> or &lt;code>dumb‑init&lt;/code> so signals are forwarded and zombies reaped:&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-dockerfile" data-lang="dockerfile">&lt;span class="line">&lt;span class="cl">&lt;span class="k">ENTRYPOINT&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;tini&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="s2">&amp;#34;--&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="s2">&amp;#34;python&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="s2">&amp;#34;app.py&amp;#34;&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="err">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;hr>
+&lt;h2 id="5better-ways-to-pause-or-protect-workloads">&lt;a href="#5better-ways-to-pause-or-protect-workloads" class="header-anchor">&lt;/a>5  Better ways to pause or protect workloads
+&lt;/h2>&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th>Need&lt;/th>
+&lt;th>Tool to use&lt;/th>
+&lt;th>Why it’s better&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td>Pause/resume an entire workload&lt;/td>
+&lt;td>&lt;strong>cgroup freezer&lt;/strong>&lt;/td>
+&lt;td>Stops tasks without abusing signals.&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>Prevent accidental kills&lt;/td>
+&lt;td>Supervisors (&lt;code>systemd&lt;/code>, &lt;code>supervisord&lt;/code>, Kubernetes)&lt;/td>
+&lt;td>Let crashes happen, then auto‑restart.&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>Faster memory cleanup post‑kill&lt;/td>
+&lt;td>&lt;code>process_mrelease()&lt;/code> (newer kernels)&lt;/td>
+&lt;td>OOM reaper frees pages even if task is stuck.&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;hr>
+&lt;h2 id="6key-takeaways">&lt;a href="#6key-takeaways" class="header-anchor">&lt;/a>6  Key take‑aways
+&lt;/h2>&lt;ul>
+&lt;li>&lt;strong>&lt;code>SIGKILL&lt;/code> is absolute—unless the kernel never delivers it.&lt;/strong>&lt;/li>
+&lt;li>Flipping &lt;code>SIGNAL_UNKILLABLE&lt;/code> (or running as PID 1) is the &lt;em>only&lt;/em> in‑kernel way to ignore &lt;code>kill -9&lt;/code>.&lt;br>
+* The vast majority of “unkillable” sightings are really uninterruptible I/O or permission/namespace issues—no dark magic required.&lt;/li>
+&lt;/ul>
+&lt;p>Happy hacking — and remember: with great &lt;code>CAP_SYS_MODULE&lt;/code> comes great responsibility!&lt;/p></description></item></channel></rss>

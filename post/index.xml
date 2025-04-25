@@ -1,0 +1,638 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Posts on vinbh</title><link>https://vinbh.github.io/post/</link><description>Recent content in Posts on vinbh</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 25 Apr 2025 00:00:00 +0000</lastBuildDate><atom:link href="https://vinbh.github.io/post/index.xml" rel="self" type="application/rss+xml"/><item><title>Demystifying the *Unkillable* Process in Linux —with a Little Help from Python</title><link>https://vinbh.github.io/p/demystifying-the-unkillable-process-in-linux-with-a-little-help-from-python/</link><pubDate>Fri, 25 Apr 2025 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/p/demystifying-the-unkillable-process-in-linux-with-a-little-help-from-python/</guid><description>&lt;h1 id="demystifying-the-unkillable-process-in-linuxwith-a-little-help-from-python">&lt;a href="#demystifying-the-unkillable-process-in-linuxwith-a-little-help-from-python" class="header-anchor">&lt;/a>Demystifying the &lt;em>Unkillable&lt;/em> Process in Linux —with a Little Help from Python
+&lt;/h1>&lt;blockquote>
+&lt;p>&lt;strong>TL;DR&lt;/strong>&lt;br>
+&lt;code>SIGKILL&lt;/code> and &lt;code>SIGSTOP&lt;/code> are meant to be final, but three kernel pathways let a task survive:&lt;/p>
+&lt;ol>
+&lt;li>The process’s &lt;code>SIGNAL_UNKILLABLE&lt;/code> flag is set (PID 1 has this by default).&lt;/li>
+&lt;li>The thread is stuck in an uninterruptible sleep (&lt;code>D&lt;/code> state) while inside the kernel.&lt;/li>
+&lt;li>A tracer, cgroup freezer, or rogue kernel module silently drops or delays the signal.&lt;/li>
+&lt;/ol>
+&lt;p>Below we’ll &lt;strong>reproduce the first case&lt;/strong> with a 25‑line kernel module driven by Python, then learn to spot the other two cases with pure Python.&lt;/p>&lt;/blockquote>
+&lt;hr>
+&lt;h2 id="1why-sigkill-ought-to-win">&lt;a href="#1why-sigkill-ought-to-win" class="header-anchor">&lt;/a>1  Why &lt;code>SIGKILL&lt;/code> &lt;em>ought&lt;/em> to win
+&lt;/h2>&lt;ul>
+&lt;li>In the Linux &lt;code>signal(7)&lt;/code> manual, &lt;strong>&lt;code>SIGKILL (9)&lt;/code>&lt;/strong> and &lt;strong>&lt;code>SIGSTOP (19)&lt;/code>&lt;/strong> are marked “cannot be caught, blocked, or ignored.”&lt;/li>
+&lt;li>Delivery can fail only when
+&lt;ul>
+&lt;li>the caller lacks permission (&lt;code>kill()&lt;/code> returns &lt;code>EPERM&lt;/code>), &lt;strong>or&lt;/strong>&lt;/li>
+&lt;li>the target’s &lt;code>signal_struct→flags&lt;/code> carries the bit &lt;strong>&lt;code>SIGNAL_UNKILLABLE&lt;/code>&lt;/strong>.&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;p>The kernel grants that flag to the very first userspace task (PID 1) so the system can’t kill its own &lt;em>init&lt;/em>.&lt;/p>
+&lt;hr>
+&lt;h2 id="2flipping-signal_unkillable-build-an-immortal-process">&lt;a href="#2flipping-signal_unkillable-build-an-immortal-process" class="header-anchor">&lt;/a>2  Flipping &lt;code>SIGNAL_UNKILLABLE&lt;/code>: build an “immortal” process
+&lt;/h2>&lt;blockquote>
+&lt;p>⚠️ &lt;strong>Run in a throw‑away VM or container.&lt;/strong>&lt;br>
+Once a PID is flagged unkillable, only a reboot or voluntary exit clears it.&lt;/p>&lt;/blockquote>
+&lt;h3 id="21the-25line-kernel-moduleunkillablec">&lt;a href="#21the-25line-kernel-moduleunkillablec" class="header-anchor">&lt;/a>2.1  The 25‑line kernel module &lt;code>unkillable.c&lt;/code>
+&lt;/h3>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-c" data-lang="c">&lt;span class="line">&lt;span class="cl">&lt;span class="c1">// compile with: make &amp;amp;&amp;amp; sudo insmod unkillable.ko
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/module.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/fs.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/pid.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/sched/signal.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#define DEV &amp;#34;unkillable&amp;#34;
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">static&lt;/span> &lt;span class="kt">ssize_t&lt;/span> &lt;span class="nf">flip&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="n">file&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">f&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="kt">char&lt;/span> &lt;span class="n">__user&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">u&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="kt">size_t&lt;/span> &lt;span class="n">pid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="kt">loff_t&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">o&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">struct&lt;/span> &lt;span class="n">pid&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">p&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="nf">find_get_pid&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">p&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">struct&lt;/span> &lt;span class="n">task_struct&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">t&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="nf">pid_task&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">p&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">PIDTYPE_PID&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">t&lt;/span> &lt;span class="o">&amp;amp;&amp;amp;&lt;/span> &lt;span class="n">t&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">signal&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">t&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">signal&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">flags&lt;/span> &lt;span class="o">|=&lt;/span> &lt;span class="n">SIGNAL_UNKILLABLE&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="cm">/* 🔑 magic */&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">put_pid&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">p&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="cm">/* “read” zero bytes — side‑effect only */&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">static&lt;/span> &lt;span class="k">const&lt;/span> &lt;span class="k">struct&lt;/span> &lt;span class="n">file_operations&lt;/span> &lt;span class="n">fops&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">{&lt;/span> &lt;span class="p">.&lt;/span>&lt;span class="n">read&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">flip&lt;/span> &lt;span class="p">};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">static&lt;/span> &lt;span class="kt">int&lt;/span> &lt;span class="n">__init&lt;/span> &lt;span class="nf">init&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="nf">register_chrdev&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">117&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">DEV&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">fops&lt;/span>&lt;span class="p">);&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">static&lt;/span> &lt;span class="kt">void&lt;/span> &lt;span class="n">__exit&lt;/span> &lt;span class="nf">exit&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span> &lt;span class="nf">unregister_chrdev&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">117&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">DEV&lt;/span>&lt;span class="p">);&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">module_init&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">init&lt;/span>&lt;span class="p">);&lt;/span> &lt;span class="nf">module_exit&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">exit&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">MODULE_LICENSE&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;GPL&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>&lt;strong>Makefile&lt;/strong>&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-makefile" data-lang="makefile">&lt;span class="line">&lt;span class="cl">&lt;span class="nv">obj-m&lt;/span> &lt;span class="o">+=&lt;/span> unkillable.o
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">all&lt;/span>&lt;span class="o">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> make -C /lib/modules/&lt;span class="k">$(&lt;/span>shell uname -r&lt;span class="k">)&lt;/span>/build &lt;span class="nv">M&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="k">$(&lt;/span>PWD&lt;span class="k">)&lt;/span> modules
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">clean&lt;/span>&lt;span class="o">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> make -C /lib/modules/&lt;span class="k">$(&lt;/span>shell uname -r&lt;span class="k">)&lt;/span>/build &lt;span class="nv">M&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="k">$(&lt;/span>PWD&lt;span class="k">)&lt;/span> clean
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Build &amp;amp; load:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ make
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ sudo insmod unkillable.ko
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ sudo mknod /dev/unkillable c &lt;span class="m">117&lt;/span> &lt;span class="m">0&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ sudo chmod &lt;span class="m">666&lt;/span> /dev/unkillable
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h3 id="22python-driverimmortalpy">&lt;a href="#22python-driverimmortalpy" class="header-anchor">&lt;/a>2.2  Python driver &lt;code>immortal.py&lt;/code>
+&lt;/h3>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="ch">#!/usr/bin/env python3&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kn">import&lt;/span> &lt;span class="nn">os&lt;/span>&lt;span class="o">,&lt;/span> &lt;span class="nn">time&lt;/span>&lt;span class="o">,&lt;/span> &lt;span class="nn">ctypes&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">pid&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">os&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">getpid&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">print&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="sa">f&lt;/span>&lt;span class="s2">&amp;#34;My PID is &lt;/span>&lt;span class="si">{&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">fd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">os&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">open&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;/dev/unkillable&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">os&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">O_RDONLY&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># read()’s *count* parameter is treated as the target PID by the driver&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">ctypes&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">CDLL&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="kc">None&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">read&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">fd&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">ctypes&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">c_char_p&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="n">pid&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">print&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="sa">f&lt;/span>&lt;span class="s2">&amp;#34;SIGNAL_UNKILLABLE flag set — hit me with `sudo kill -9 &lt;/span>&lt;span class="si">{&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">`&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">while&lt;/span> &lt;span class="kc">True&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">time&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">sleep&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Run it:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ python3 immortal.py
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">My PID is &lt;span class="m">44201&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">SIGNAL_UNKILLABLE flag &lt;span class="nb">set&lt;/span> — hit me with &lt;span class="sb">`&lt;/span>sudo &lt;span class="nb">kill&lt;/span> -9 44201&lt;span class="sb">`&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h3 id="23shell-test-kill-9-that-fails">&lt;a href="#23shell-test-kill-9-that-fails" class="header-anchor">&lt;/a>2.3  Shell test: &lt;code>kill -9&lt;/code> that &lt;em>fails&lt;/em>
+&lt;/h3>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># second terminal&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ sudo &lt;span class="nb">kill&lt;/span> -9 &lt;span class="m">44201&lt;/span> &lt;span class="c1"># exit‑status 0, signal accepted…&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ps -p &lt;span class="m">44201&lt;/span> -o pid,stat,cmd
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> PID STAT CMD
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="m">44201&lt;/span> S python3 immortal.py &lt;span class="c1"># …but the process is still alive&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>The kernel discarded the signal before delivery, so the task keeps running.&lt;/p>
+&lt;hr>
+&lt;h2 id="3diagnosing-stubborn-pids-with-pure-python">&lt;a href="#3diagnosing-stubborn-pids-with-pure-python" class="header-anchor">&lt;/a>3  Diagnosing stubborn PIDs with pure Python
+&lt;/h2>&lt;p>Most production “unkillables” aren’t flagged; they’re &lt;strong>stuck inside the kernel&lt;/strong>.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;span class="lnt">9
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="kn">import&lt;/span> &lt;span class="nn">psutil&lt;/span>&lt;span class="o">,&lt;/span> &lt;span class="nn">signal&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">for&lt;/span> &lt;span class="n">p&lt;/span> &lt;span class="ow">in&lt;/span> &lt;span class="n">psutil&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">process_iter&lt;/span>&lt;span class="p">([&lt;/span>&lt;span class="s1">&amp;#39;pid&amp;#39;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s1">&amp;#39;name&amp;#39;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s1">&amp;#39;status&amp;#39;&lt;/span>&lt;span class="p">]):&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="n">p&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">status&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="n">psutil&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">STATUS_DISK_SLEEP&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="c1"># ’D’ state&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">print&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;Blocked:&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">p&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">p&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">name&lt;/span>&lt;span class="p">())&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">try&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">p&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">send_signal&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">signal&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">SIGKILL&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">except&lt;/span> &lt;span class="n">psutil&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">AccessDenied&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">print&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34; EPERM — different UID or namespace?&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;ul>
+&lt;li>&lt;code>STATUS_DISK_SLEEP&lt;/code> corresponds to kernel &lt;code>TASK_UNINTERRUPTIBLE&lt;/code>.&lt;br>
+&lt;code>SIGKILL&lt;/code> is queued but won’t run until the I/O finishes.&lt;/li>
+&lt;li>&lt;code>psutil.AccessDenied&lt;/code> (or &lt;code>kill -0 PID&lt;/code> → &lt;code>EPERM&lt;/code>) means you’re outside the target’s UID or PID namespace.&lt;/li>
+&lt;/ul>
+&lt;hr>
+&lt;h2 id="4pid1-quirks-host--containers">&lt;a href="#4pid1-quirks-host--containers" class="header-anchor">&lt;/a>4  PID 1 quirks (host &amp;amp; containers)
+&lt;/h2>&lt;ul>
+&lt;li>&lt;strong>Global PID 1&lt;/strong> is born with &lt;code>SIGNAL_UNKILLABLE&lt;/code>; &lt;code>kill -9 1&lt;/code> returns &lt;code>EPERM&lt;/code>.&lt;/li>
+&lt;li>In containers, the entry‑point becomes PID 1 &lt;em>in that namespace&lt;/em> and inherits the same immunity.&lt;br>
+&lt;strong>Fix:&lt;/strong> run your app under a mini‑init such as &lt;code>tini&lt;/code> or &lt;code>dumb‑init&lt;/code> so signals are forwarded and zombies reaped:&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-dockerfile" data-lang="dockerfile">&lt;span class="line">&lt;span class="cl">&lt;span class="k">ENTRYPOINT&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;tini&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="s2">&amp;#34;--&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="s2">&amp;#34;python&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="s2">&amp;#34;app.py&amp;#34;&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="err">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;hr>
+&lt;h2 id="5better-ways-to-pause-or-protect-workloads">&lt;a href="#5better-ways-to-pause-or-protect-workloads" class="header-anchor">&lt;/a>5  Better ways to pause or protect workloads
+&lt;/h2>&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th>Need&lt;/th>
+&lt;th>Tool to use&lt;/th>
+&lt;th>Why it’s better&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td>Pause/resume an entire workload&lt;/td>
+&lt;td>&lt;strong>cgroup freezer&lt;/strong>&lt;/td>
+&lt;td>Stops tasks without abusing signals.&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>Prevent accidental kills&lt;/td>
+&lt;td>Supervisors (&lt;code>systemd&lt;/code>, &lt;code>supervisord&lt;/code>, Kubernetes)&lt;/td>
+&lt;td>Let crashes happen, then auto‑restart.&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>Faster memory cleanup post‑kill&lt;/td>
+&lt;td>&lt;code>process_mrelease()&lt;/code> (newer kernels)&lt;/td>
+&lt;td>OOM reaper frees pages even if task is stuck.&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;hr>
+&lt;h2 id="6key-takeaways">&lt;a href="#6key-takeaways" class="header-anchor">&lt;/a>6  Key take‑aways
+&lt;/h2>&lt;ul>
+&lt;li>&lt;strong>&lt;code>SIGKILL&lt;/code> is absolute—unless the kernel never delivers it.&lt;/strong>&lt;/li>
+&lt;li>Flipping &lt;code>SIGNAL_UNKILLABLE&lt;/code> (or running as PID 1) is the &lt;em>only&lt;/em> in‑kernel way to ignore &lt;code>kill -9&lt;/code>.&lt;br>
+* The vast majority of “unkillable” sightings are really uninterruptible I/O or permission/namespace issues—no dark magic required.&lt;/li>
+&lt;/ul>
+&lt;p>Happy hacking — and remember: with great &lt;code>CAP_SYS_MODULE&lt;/code> comes great responsibility!&lt;/p></description></item><item><title>Welcome to My Digital Playground</title><link>https://vinbh.github.io/p/hello-world/</link><pubDate>Fri, 08 Mar 2024 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/p/hello-world/</guid><description>&lt;img src="https://vinbh.github.io/p/hello-world/cover.jpg" alt="Featured image of post Welcome to My Digital Playground" />&lt;p>Hey there! Welcome to my corner of the internet. I&amp;rsquo;m Vinbh, a tech enthusiast and avid gamer who loves to explore the intersection of technology and gaming. This blog is where I&amp;rsquo;ll share my adventures in both worlds - from debugging production issues to conquering virtual realms.&lt;/p>
+&lt;h2 id="what-to-expect-here">&lt;a href="#what-to-expect-here" class="header-anchor">&lt;/a>What to Expect Here
+&lt;/h2>&lt;ul>
+&lt;li>🖥️ &lt;strong>Tech Deep Dives&lt;/strong>: Exploring software engineering, DevOps practices, and system architecture&lt;/li>
+&lt;li>🎮 &lt;strong>Gaming Adventures&lt;/strong>: Reviews, strategies, and stories from my gaming sessions&lt;/li>
+&lt;li>🛠️ &lt;strong>Setup Guides&lt;/strong>: Optimizing both development and gaming environments&lt;/li>
+&lt;li>💡 &lt;strong>Tips &amp;amp; Tricks&lt;/strong>: Useful shortcuts and life hacks for developers and gamers&lt;/li>
+&lt;/ul>
+&lt;p>Stay tuned for regular updates on my latest projects, gaming achievements, and technical discoveries. Whether you&amp;rsquo;re here for the code or the games (or both!), I hope you&amp;rsquo;ll find something interesting.&lt;/p>
+&lt;p>Remember: Always outnumbered, never outgunned! 🚀&lt;/p>
+&lt;blockquote>
+&lt;p>&amp;ldquo;In code we trust, in games we must.&amp;rdquo;&lt;/p>&lt;/blockquote></description></item><item><title>The Myth of the 13 DNS Root Server Addresses</title><link>https://vinbh.github.io/p/the-myth-of-the-13-dns-root-server-addresses/</link><pubDate>Mon, 10 Mar 2025 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/p/the-myth-of-the-13-dns-root-server-addresses/</guid><description>&lt;h1 id="why-are-there-only-13-dns-root-server-addresses">&lt;a href="#why-are-there-only-13-dns-root-server-addresses" class="header-anchor">&lt;/a>Why Are There Only 13 DNS Root Server Addresses?
+&lt;/h1>&lt;h2 id="introduction">&lt;a href="#introduction" class="header-anchor">&lt;/a>Introduction
+&lt;/h2>&lt;p>If you’re reading this blog post, chances are you’re already reaping the benefits of a highly distributed system for resolving domain names. Every time you type in a website address or click a link, the Domain Name System (DNS) springs into action, translating your friendly “www” addresses into numerical IP addresses. But you might have come across a puzzling fact: &lt;strong>there are only 13 DNS root server addresses.&lt;/strong> Let’s explore why that is and bust a common misconception!&lt;/p>
+&lt;blockquote>
+&lt;p>**“Why are there only 13 DNS root server addresses?&lt;br>
+A common misconception is that there are only 13 root servers in the world. In reality there are many more, but still only 13 IP addresses used to query the different root server networks. Limitations in the original architecture of DNS require there to be a maximum of 13 server addresses in the root zone. In the early days of the Internet, there was only one server for each of the 13 IP addresses, most of which were located in the United States.&lt;/p>
+&lt;p>Today each of the 13 IP addresses has several servers, which use Anycast routing to distribute requests based on load and proximity. Right now there are over 600 different DNS root servers distributed across every populated continent on earth.”**&lt;/p>&lt;/blockquote>
+&lt;h2 id="the-myth-of-the-13-servers">&lt;a href="#the-myth-of-the-13-servers" class="header-anchor">&lt;/a>The Myth of the 13 Servers
+&lt;/h2>&lt;p>One of the most common internet myths is that there are only 13 &lt;em>physical&lt;/em> DNS root servers worldwide. Imagine if that were true—nearly the entire planet’s DNS lookups would be handled by a mere handful of machines! That could be a bit scary, like having only 13 vending machines for coffee for everyone on Earth. (We’d never get caffeinated enough!)&lt;/p>
+&lt;p>In truth, the number 13 corresponds to &lt;strong>13 unique IP addresses&lt;/strong>, not 13 actual physical servers.&lt;/p>
+&lt;h2 id="the-historical-reason">&lt;a href="#the-historical-reason" class="header-anchor">&lt;/a>The Historical Reason
+&lt;/h2>&lt;p>When DNS was first developed, its architecture was limited in how many name server addresses could be listed in the root zone. The engineers decided on a maximum of 13, due to technical constraints related to:&lt;/p>
+&lt;ol>
+&lt;li>&lt;strong>Protocol Limitations:&lt;/strong> Early DNS packets had size limitations, affecting how many root server entries could be included.&lt;/li>
+&lt;li>&lt;strong>Network Efficiency:&lt;/strong> DNS was originally designed for a smaller internet, not the mega-network we use today.&lt;/li>
+&lt;/ol>
+&lt;h2 id="anycast-magic">&lt;a href="#anycast-magic" class="header-anchor">&lt;/a>Anycast Magic
+&lt;/h2>&lt;p>Fast-forward to the modern era, and we have &lt;strong>Anycast routing&lt;/strong> to save the day. The idea behind Anycast is delightfully simple yet highly effective:&lt;/p>
+&lt;ul>
+&lt;li>&lt;strong>Multiple Servers, One IP&lt;/strong>: You have multiple servers around the globe, but each shares the &lt;em>same&lt;/em> IP address.&lt;/li>
+&lt;li>&lt;strong>Geographical Proximity&lt;/strong>: Internet traffic is routed automatically to the nearest or least busy server using this shared IP.&lt;/li>
+&lt;li>&lt;strong>Load Balancing&lt;/strong>: The load is spread among many servers, increasing reliability and speed.&lt;/li>
+&lt;/ul>
+&lt;p>Thanks to Anycast, each of those 13 “root server addresses” can represent a cluster of physical servers scattered across multiple continents. As of now, there are &lt;strong>over 600&lt;/strong> physically distinct servers operating under those 13 addresses, ensuring global coverage and robust DNS resolution.&lt;/p>
+&lt;h2 id="why-this-matters">&lt;a href="#why-this-matters" class="header-anchor">&lt;/a>Why This Matters
+&lt;/h2>&lt;ul>
+&lt;li>&lt;strong>Resilience&lt;/strong>: With so many distributed servers, DNS remains stable even if some servers go down.&lt;/li>
+&lt;li>&lt;strong>Speed&lt;/strong>: You’re usually routed to the nearest root server, which means faster website resolutions.&lt;/li>
+&lt;li>&lt;strong>Scalability&lt;/strong>: More servers can always be added to the clusters under the same IP to handle increased global internet usage.&lt;/li>
+&lt;/ul>
+&lt;h2 id="fun-fact">&lt;a href="#fun-fact" class="header-anchor">&lt;/a>Fun Fact
+&lt;/h2>&lt;p>You might stumble upon root servers named with letters—like &lt;code>A&lt;/code>, &lt;code>B&lt;/code>, &lt;code>C&lt;/code>, etc. These labels correspond to each of the 13 IP addresses. For example, “A” is one of the addresses (named &lt;code>a.root-servers.net&lt;/code>), and it has multiple physical servers worldwide.&lt;/p>
+&lt;h2 id="final-thoughts">&lt;a href="#final-thoughts" class="header-anchor">&lt;/a>Final Thoughts
+&lt;/h2>&lt;p>So, the next time you hear someone say there are only 13 DNS root servers, feel free to put on your DNS superhero cape and explain the real story. &lt;strong>The “13” refers to IP addresses, not the number of physical machines!&lt;/strong> In reality, these IP addresses direct you to hundreds of actual servers via the Anycast wonder.&lt;/p>
+&lt;p>If you’re ever curious about where your nearest root server is located, there are DNS tools out there to show your DNS route. It’s a neat exercise in seeing how globally connected the internet really is—even behind the scenes.&lt;/p>
+&lt;hr></description></item><item><title>The Choreography of Packets: How TCP/IP Actually Works</title><link>https://vinbh.github.io/p/the-choreography-of-packets-how-tcp/ip-actually-works/</link><pubDate>Sat, 09 Mar 2024 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/p/the-choreography-of-packets-how-tcp/ip-actually-works/</guid><description>&lt;p>I still remember my first encounter with TCP/IP back in the early 2014. Trying to debug why my game was lagging, I stumbled upon a world of packets, acknowledgments, and sequence numbers that seemed impenetrable at first. Years later, I&amp;rsquo;ve come to appreciate the elegant dance that happens beneath our everyday internet experience. Let me guide you through it.&lt;/p>
+&lt;h2 id="beyond-the-buzzwords-tcp-and-ip-unwrapped">&lt;a href="#beyond-the-buzzwords-tcp-and-ip-unwrapped" class="header-anchor">&lt;/a>Beyond the Buzzwords: TCP and IP Unwrapped
+&lt;/h2>&lt;p>When we talk about &amp;ldquo;TCP/IP,&amp;rdquo; we&amp;rsquo;re really discussing two distinct protocols working in tandem. IP (Internet Protocol) handles the addressing and routing—essentially determining &lt;em>where&lt;/em> packets should go. TCP (Transmission Control Protocol) ensures reliability, handling the &lt;em>how&lt;/em> of data transmission.&lt;/p>
+&lt;p>IP is like the postal service&amp;rsquo;s infrastructure—addresses, sorting facilities, and delivery routes. TCP is more like certified mail with tracking, receipt confirmation, and guaranteed delivery. One without the other leaves you with either a reliable system that can&amp;rsquo;t find its destination or excellent routing with no guarantees of delivery.&lt;/p>
+&lt;h2 id="the-famous-three-way-handshake">&lt;a href="#the-famous-three-way-handshake" class="header-anchor">&lt;/a>The Famous Three-Way Handshake
+&lt;/h2>&lt;p>Before a single byte of your cat video or important business document traverses the internet, TCP performs an elaborate greeting ritual known as the three-way handshake.&lt;/p>
+&lt;pre>&lt;code>Your Browser Web Server
+| |
+| SYN (seq=42) |
+| --------------------------→ | &amp;quot;Hello, I'd like to talk.
+| | My reference number is 42.&amp;quot;
+| |
+| SYN-ACK (seq=100,ack=43) |
+| ←--------------------------- | &amp;quot;I hear you! Your ref is 42+1,
+| | mine is 100.&amp;quot;
+| |
+| ACK (ack=101) |
+| --------------------------→ | &amp;quot;Got it! Let's start talking!&amp;quot;
+| |
+&lt;/code>&lt;/pre>
+&lt;p>Connection Established Connection Established&lt;/p>
+&lt;p>What&amp;rsquo;s fascinating here isn&amp;rsquo;t just the mechanical exchange, but the implied vulnerability. When your device sends that initial SYN packet, it allocates memory and resources in anticipation of the connection. This became the basis for the infamous SYN flood attacks that brought down major websites in the late 1990s—attackers would send thousands of SYN packets with no intention of completing the handshake, exhausting server resources.&lt;/p>
+&lt;h2 id="tcps-cautious-congestion-control">&lt;a href="#tcps-cautious-congestion-control" class="header-anchor">&lt;/a>TCP&amp;rsquo;s Cautious Congestion Control
+&lt;/h2>&lt;p>One aspect of TCP that continues to amaze me is its inherent caution. Unlike humans who often dive headfirst into situations, TCP approaches network capacity with remarkable restraint through its slow-start mechanism.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"> ┌─────────────────┐
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Connection │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Starts │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> └────────┬────────┘
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ▼
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ┌─────────────────┐
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Initial cwnd = │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ 10 segments │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> └────────┬────────┘
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ▼
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ┌─────────────────┐ No ┌─────────────────┐
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Acknowledgments ├────────────────────► Timeout, Reset │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Received? │ └────────┬────────┘
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> └────────┬────────┘ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Yes │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ▼ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ┌─────────────────┐ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Double cwnd │ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> └────────┬────────┘ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ▼ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ┌─────────────────┐ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Packet Loss │ Yes │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ Detected? ├─────────────────┐ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> └────────┬────────┘ │ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ No ▼ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> │ ┌─────────────────┐ │
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> └──────────────────► Cut cwnd in half├─┘
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> └─────────────────┘
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>I once debugged a strange performance issue where file transfers would start slowly and then suddenly accelerate after a few seconds. The culprit? TCP&amp;rsquo;s slow-start algorithm doing exactly what it should—cautiously probing the network&amp;rsquo;s capacity before ramping up.&lt;/p>
+&lt;p>Initial congestion window sizes have evolved over time. The original TCP specifications suggested starting with just 1 segment, but modern implementations typically use 10 segments (about 14KB). This evolution reflects our changing networks—from the fragile early internet to today&amp;rsquo;s robust infrastructure.&lt;/p>
+&lt;h2 id="the-throughput-equation-nobody-tells-you-about">&lt;a href="#the-throughput-equation-nobody-tells-you-about" class="header-anchor">&lt;/a>The Throughput Equation Nobody Tells You About
+&lt;/h2>&lt;p>Here&amp;rsquo;s something I rarely see discussed outside academic papers: the TCP throughput is fundamentally limited by an equation relating packet loss, round-trip time, and maximum segment size:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">Max Throughput ≈ (MSS/RTT) * (1/√p)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Where:&lt;/p>
+&lt;ul>
+&lt;li>MSS = Maximum Segment Size&lt;/li>
+&lt;li>RTT = Round Trip Time&lt;/li>
+&lt;li>p = Packet loss probability&lt;/li>
+&lt;/ul>
+&lt;p>This equation shocked me when I first encountered it. A mere 0.1% packet loss can dramatically limit throughput on high-latency connections. This is why your video call to Australia stutters even with a &amp;ldquo;fast&amp;rdquo; internet connection—physics and mathematics conspire against you.&lt;/p>
+&lt;h2 id="tcp-fast-open-skipping-the-formalities">&lt;a href="#tcp-fast-open-skipping-the-formalities" class="header-anchor">&lt;/a>TCP Fast Open: Skipping the Formalities
+&lt;/h2>&lt;p>Anyone who&amp;rsquo;s worked with high-frequency API calls knows the pain of TCP connection overhead. TCP Fast Open (TFO) addresses this by allowing data transmission during the initial handshake.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"> Client Server
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | SYN + TFO Cookie + DATA |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | ---------------------------→ |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | SYN-ACK + ACK(DATA) + DATA |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | ←--------------------------- |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | ACK |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | ---------------------------→ |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | Data exchange already started!
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>I&amp;rsquo;ve seen this reduce page load times by 10-15% for API-heavy applications—not revolutionary, but those milliseconds add up to a noticeably smoother user experience.&lt;/p>
+&lt;h2 id="the-practical-side-tcp-tuning-tools">&lt;a href="#the-practical-side-tcp-tuning-tools" class="header-anchor">&lt;/a>The Practical Side: TCP Tuning Tools
+&lt;/h2>&lt;p>After years of wrestling with network performance, I&amp;rsquo;ve accumulated a toolkit for TCP diagnosis and tuning:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># See your current TCP settings&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sysctl net.ipv4.tcp_*
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Watch TCP connections in real-time&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">ss -tunap
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Capture and analyze TCP flows&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">tcpdump -i eth0 -nn &lt;span class="s1">&amp;#39;tcp port 80&amp;#39;&lt;/span> -w capture.pcap
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Modern Linux distributions have sane defaults, but in specific scenarios (high-bandwidth, high-latency links), tweaking parameters like &lt;code>tcp_rmem&lt;/code> and &lt;code>tcp_wmem&lt;/code> can yield significant improvements. I once doubled throughput on a transpacific link just by adjusting these buffers.&lt;/p>
+&lt;h2 id="when-tcp-shows-its-age">&lt;a href="#when-tcp-shows-its-age" class="header-anchor">&lt;/a>When TCP Shows Its Age
+&lt;/h2>&lt;p>Despite its elegance, TCP was designed in a different era. Its conservative approach can be detrimental in certain scenarios:&lt;/p>
+&lt;ol>
+&lt;li>&lt;strong>Mobile networks&lt;/strong> with rapidly changing conditions confuse TCP&amp;rsquo;s congestion algorithms&lt;/li>
+&lt;li>&lt;strong>Short-lived connections&lt;/strong> (like API calls) barely escape slow-start before terminating&lt;/li>
+&lt;li>&lt;strong>High bandwidth-delay product paths&lt;/strong> struggle to utilize available capacity&lt;/li>
+&lt;/ol>
+&lt;p>This is why Google developed QUIC (which evolved into HTTP/3), employing UDP as a foundation and reimplementing reliability mechanisms with modern networks in mind.&lt;/p>
+&lt;h2 id="conclusion-the-invisible-orchestra">&lt;a href="#conclusion-the-invisible-orchestra" class="header-anchor">&lt;/a>Conclusion: The Invisible Orchestra
+&lt;/h2>&lt;p>What fascinates me most about TCP/IP isn&amp;rsquo;t just its technical intricacies, but how it embodies certain values: caution, fairness, reliability, and adaptability. When billions of devices run these protocols, they create an invisible orchestra of give-and-take that allows our global network to function.&lt;/p>
+&lt;p>Next time your browser loads a page, picture those SYN packets setting off on their journey, the careful dance of slow-start packets testing the network&amp;rsquo;s limits, and the congestion avoidance algorithms ensuring everyone gets their fair share of the pipe.&lt;/p>
+&lt;p>Understanding TCP/IP isn&amp;rsquo;t just technical knowledge—it&amp;rsquo;s appreciating the digital social contract that makes our connected world possible.&lt;/p>
+&lt;hr>
+&lt;p>&lt;em>Do you have questions about TCP/IP or network performance? Drop a comment below—I&amp;rsquo;m always up for a good networking discussion!&lt;/em>&lt;/p>
+&lt;blockquote>
+&lt;p>Reference: For more in-depth details, please refer to Chapter 2 of &lt;em>High Performance Browser Networking&lt;/em> by Ilya Grigorik.&lt;/p>&lt;/blockquote></description></item><item><title>Breaking the Lock: How SREs Can Prevent Scalability Collapse and Keep Systems Blazing Fast</title><link>https://vinbh.github.io/p/breaking-the-lock-how-sres-can-prevent-scalability-collapse-and-keep-systems-blazing-fast/</link><pubDate>Sat, 15 Mar 2025 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/p/breaking-the-lock-how-sres-can-prevent-scalability-collapse-and-keep-systems-blazing-fast/</guid><description>&lt;h1 id="avoiding-scalability-collapse-in-lock-heavy-systems-lessons-for-sres">&lt;a href="#avoiding-scalability-collapse-in-lock-heavy-systems-lessons-for-sres" class="header-anchor">&lt;/a>Avoiding Scalability Collapse in Lock-Heavy Systems: Lessons for SREs
+&lt;/h1>&lt;p>As Site Reliability Engineers (SREs), we often deal with scaling distributed systems, optimizing performance, and ensuring high availability. One of the subtle yet critical challenges in highly concurrent environments is &lt;strong>scalability collapse&lt;/strong> due to &lt;strong>saturated locks&lt;/strong>. A recent study (&lt;a class="link" href="https://arxiv.org/abs/1905.10818" target="_blank" rel="noopener"
+>Dice &amp;amp; Kogan, 2019&lt;/a>) sheds light on how lock contention can lead to sudden performance degradation and proposes &lt;strong>Generic Concurrency Restriction (GCR)&lt;/strong> as a mitigation strategy.&lt;/p>
+&lt;h2 id="the-problem-when-more-threads-hurt-performance">&lt;a href="#the-problem-when-more-threads-hurt-performance" class="header-anchor">&lt;/a>The Problem: When More Threads Hurt Performance
+&lt;/h2>&lt;p>In a multi-core system, locks ensure exclusive access to shared resources. However, as the number of threads waiting for a lock increases, the performance of the application can &lt;strong>fade or drop abruptly&lt;/strong>. This phenomenon, known as &lt;strong>scalability collapse&lt;/strong>, happens because:&lt;/p>
+&lt;ul>
+&lt;li>&lt;strong>Threads compete for shared resources&lt;/strong> (e.g., CPU cache, last-level cache (LLC)).&lt;/li>
+&lt;li>&lt;strong>Increased cache misses and contention&lt;/strong> lead to performance degradation.&lt;/li>
+&lt;li>&lt;strong>More threads waiting for a lock waste CPU cycles&lt;/strong>, exacerbating the slowdown.&lt;/li>
+&lt;/ul>
+&lt;h3 id="real-world-example-microservices-and-database-locks">&lt;a href="#real-world-example-microservices-and-database-locks" class="header-anchor">&lt;/a>Real-World Example: Microservices and Database Locks
+&lt;/h3>&lt;p>Imagine an SRE managing a high-traffic microservices architecture where multiple services interact with a database. If a critical section (e.g., updating a shared counter) is protected by a lock, high concurrency can cause:&lt;/p>
+&lt;ul>
+&lt;li>Increased contention on the lock.&lt;/li>
+&lt;li>Threads waiting longer to acquire the lock, reducing throughput.&lt;/li>
+&lt;li>Potential &lt;strong>CPU starvation&lt;/strong>, leading to cascading failures.&lt;/li>
+&lt;/ul>
+&lt;p>Similar issues can arise in &lt;strong>load balancers&lt;/strong>, &lt;strong>rate-limiting mechanisms&lt;/strong>, and &lt;strong>leader election processes&lt;/strong>.&lt;/p>
+&lt;h2 id="the-solution-generic-concurrency-restriction-gcr">&lt;a href="#the-solution-generic-concurrency-restriction-gcr" class="header-anchor">&lt;/a>The Solution: Generic Concurrency Restriction (GCR)
+&lt;/h2>&lt;p>The paper introduces &lt;strong>Generic Concurrency Restriction (GCR)&lt;/strong>, a &lt;strong>lock-agnostic&lt;/strong> mechanism that intercepts lock acquisition calls and decides when a thread is &lt;strong>allowed&lt;/strong> to proceed. This avoids excessive contention and improves overall system performance.&lt;/p>
+&lt;h3 id="key-benefits-of-gcr">&lt;a href="#key-benefits-of-gcr" class="header-anchor">&lt;/a>Key Benefits of GCR:
+&lt;/h3>&lt;ul>
+&lt;li>&lt;strong>Reduces contention&lt;/strong> by limiting the number of threads acquiring a lock.&lt;/li>
+&lt;li>&lt;strong>Enhances NUMA awareness&lt;/strong> (in GCR-NUMA) by ensuring threads running on the same socket acquire the lock.&lt;/li>
+&lt;li>&lt;strong>Introduces negligible overhead&lt;/strong> when the lock is uncontended.&lt;/li>
+&lt;li>&lt;strong>Improves performance by orders of magnitude&lt;/strong> in contention-heavy scenarios.&lt;/li>
+&lt;/ul>
+&lt;h2 id="sre-best-practices-to-avoid-scalability-collapse">&lt;a href="#sre-best-practices-to-avoid-scalability-collapse" class="header-anchor">&lt;/a>SRE Best Practices to Avoid Scalability Collapse
+&lt;/h2>&lt;p>While GCR is a promising approach, SREs should consider the following strategies to mitigate lock contention issues:&lt;/p>
+&lt;h3 id="1-monitor-and-profile-lock-contention">&lt;a href="#1-monitor-and-profile-lock-contention" class="header-anchor">&lt;/a>1. &lt;strong>Monitor and Profile Lock Contention&lt;/strong>
+&lt;/h3>&lt;p>Use tools like:&lt;/p>
+&lt;ul>
+&lt;li>&lt;strong>eBPF-based tracers&lt;/strong> (e.g., &lt;code>bcc&lt;/code>, &lt;code>perf&lt;/code>, &lt;code>LockStat&lt;/code> in Java)&lt;/li>
+&lt;li>&lt;strong>Prometheus metrics&lt;/strong> (&lt;code>process_thread_cpu_time_seconds&lt;/code>, &lt;code>thread_blocked_time&lt;/code>)&lt;/li>
+&lt;li>&lt;strong>Flame graphs&lt;/strong> to identify lock-heavy functions&lt;/li>
+&lt;/ul>
+&lt;h3 id="2-use-adaptive-concurrency-control">&lt;a href="#2-use-adaptive-concurrency-control" class="header-anchor">&lt;/a>2. &lt;strong>Use Adaptive Concurrency Control&lt;/strong>
+&lt;/h3>&lt;p>Instead of blindly increasing worker threads:&lt;/p>
+&lt;ul>
+&lt;li>Implement &lt;strong>load shedding&lt;/strong> (e.g., dropping requests instead of queuing).&lt;/li>
+&lt;li>Use &lt;strong>adaptive thread pools&lt;/strong> that scale based on system metrics.&lt;/li>
+&lt;li>Apply &lt;strong>backpressure mechanisms&lt;/strong> to prevent thread explosion.&lt;/li>
+&lt;/ul>
+&lt;h3 id="3-prefer-lock-free-or-optimistic-concurrency-techniques">&lt;a href="#3-prefer-lock-free-or-optimistic-concurrency-techniques" class="header-anchor">&lt;/a>3. &lt;strong>Prefer Lock-Free or Optimistic Concurrency Techniques&lt;/strong>
+&lt;/h3>&lt;p>Where possible:&lt;/p>
+&lt;ul>
+&lt;li>Use &lt;strong>lock-free data structures&lt;/strong> (e.g., &lt;code>ConcurrentHashMap&lt;/code>, &lt;code>CAS-based algorithms&lt;/code>).&lt;/li>
+&lt;li>Leverage &lt;strong>optimistic concurrency control&lt;/strong> (OCC) over pessimistic locking.&lt;/li>
+&lt;li>Consider &lt;strong>event-driven architectures&lt;/strong> instead of synchronous locking.&lt;/li>
+&lt;/ul>
+&lt;h3 id="4-optimize-for-numa-awareness">&lt;a href="#4-optimize-for-numa-awareness" class="header-anchor">&lt;/a>4. &lt;strong>Optimize for NUMA Awareness&lt;/strong>
+&lt;/h3>&lt;ul>
+&lt;li>Pin threads to specific NUMA nodes to &lt;strong>reduce remote memory access overhead&lt;/strong>.&lt;/li>
+&lt;li>Use &lt;strong>NUMA-aware memory allocation&lt;/strong> to improve cache efficiency.&lt;/li>
+&lt;/ul>
+&lt;h3 id="5-mitigate-oversubscription-in-cloud-deployments">&lt;a href="#5-mitigate-oversubscription-in-cloud-deployments" class="header-anchor">&lt;/a>5. &lt;strong>Mitigate Oversubscription in Cloud Deployments&lt;/strong>
+&lt;/h3>&lt;ul>
+&lt;li>Avoid &lt;strong>overcommitting CPU resources&lt;/strong> in Kubernetes (&lt;code>requests vs. limits&lt;/code>).&lt;/li>
+&lt;li>Use &lt;strong>cgroup limits&lt;/strong> to prevent one container from monopolizing CPU.&lt;/li>
+&lt;li>Enable &lt;strong>thread-aware scaling policies&lt;/strong> in autoscalers (HPA/VPA).&lt;/li>
+&lt;/ul>
+&lt;h2 id="conclusion">&lt;a href="#conclusion" class="header-anchor">&lt;/a>Conclusion
+&lt;/h2>&lt;p>Lock contention is a hidden performance killer that can cripple the scalability of even well-architected systems. &lt;strong>GCR and NUMA-aware locking strategies&lt;/strong> provide effective ways to manage concurrency without sacrificing throughput. As SREs, our role is to &lt;strong>observe, measure, and adapt&lt;/strong>—ensuring that our systems scale gracefully under high load.&lt;/p>
+&lt;p>By integrating &lt;strong>concurrency-aware monitoring&lt;/strong>, &lt;strong>adaptive thread control&lt;/strong>, and &lt;strong>NUMA optimizations&lt;/strong>, we can prevent scalability collapse and build &lt;strong>highly resilient&lt;/strong> distributed systems.&lt;/p>
+&lt;hr>
+&lt;p>📌 &lt;em>Have you faced lock contention issues in production? Share your experiences in the PRs!&lt;/em>&lt;/p></description></item><item><title>Video Gallery</title><link>https://vinbh.github.io/p/video-gallery/</link><pubDate>Fri, 08 Mar 2024 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/p/video-gallery/</guid><description>&lt;h2 id="gaming-highlights">&lt;a href="#gaming-highlights" class="header-anchor">&lt;/a>Gaming Highlights
+&lt;/h2>&lt;h3 id="epic-gaming-moments">&lt;a href="#epic-gaming-moments" class="header-anchor">&lt;/a>Epic Gaming Moments
+&lt;/h3>&lt;p>&lt;div class="video-wrapper">
+&lt;iframe loading="lazy"
+src="https://www.youtube.com/embed/HrS_trkkHLk?si=aoVOpskiGgKNzQ5T"
+allowfullscreen
+title="YouTube Video"
+>
+&lt;/iframe>
+&lt;/div>
+&lt;em>Some PUBG PC fun!!&lt;/em>&lt;/p>
+&lt;h3 id="game-reviews--first-impressions">&lt;a href="#game-reviews--first-impressions" class="header-anchor">&lt;/a>Game Reviews &amp;amp; First Impressions
+&lt;/h3>&lt;p>&lt;div class="video-wrapper">
+&lt;iframe loading="lazy"
+src="https://www.youtube.com/embed/yYHUkWTzKRg"
+allowfullscreen
+title="YouTube Video"
+>
+&lt;/iframe>
+&lt;/div>
+&lt;em>FarCry4 Yeti vs 50BMG!&lt;/em>&lt;/p>
+&lt;h2 id="tech-content">&lt;a href="#tech-content" class="header-anchor">&lt;/a>Tech Content
+&lt;/h2>&lt;hr></description></item><item><title>My Tech &amp; Gaming Journey</title><link>https://vinbh.github.io/p/my-tech-gaming-journey/</link><pubDate>Fri, 25 Aug 2023 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/p/my-tech-gaming-journey/</guid><description>&lt;img src="https://vinbh.github.io/p/my-tech-gaming-journey/cover.jpg" alt="Featured image of post My Tech &amp; Gaming Journey" />&lt;h2 id="latest-gaming-adventures">&lt;a href="#latest-gaming-adventures" class="header-anchor">&lt;/a>Latest Gaming Adventures
+&lt;/h2>&lt;p>I&amp;rsquo;ve been diving deep into some incredible games lately. Whether it&amp;rsquo;s mastering raid mechanics or exploring vast open worlds, gaming has always been my perfect balance to coding sessions.&lt;/p>
+&lt;h3 id="current-favorites">&lt;a href="#current-favorites" class="header-anchor">&lt;/a>Current Favorites
+&lt;/h3>&lt;ul>
+&lt;li>Exploring the depths of Palworld&amp;rsquo;s crafting system&lt;/li>
+&lt;li>Competitive matches in Valorant&lt;/li>
+&lt;li>Building automation systems in Factorio&lt;/li>
+&lt;/ul>
+&lt;h3 id="currently-playing">&lt;a href="#currently-playing" class="header-anchor">&lt;/a>Currently Playing
+&lt;/h3>&lt;ul>
+&lt;li>&lt;strong>Red Dead Redemption 2:&lt;/strong> Riding the frontier and rewriting my own legend.&lt;/li>
+&lt;li>&lt;strong>Age of Empires III:&lt;/strong> Commanding ancient armies like a modern-day general.&lt;/li>
+&lt;li>&lt;strong>Assassin&amp;rsquo;s Creed Odyssey:&lt;/strong> Embarking on mythic quests through ancient worlds.&lt;/li>
+&lt;li>&lt;strong>Sniper Elite: Resistance:&lt;/strong> Sharpening my sniper skills with every covert mission.&lt;/li>
+&lt;/ul>
+&lt;h2 id="tech-projects--learnings">&lt;a href="#tech-projects--learnings" class="header-anchor">&lt;/a>Tech Projects &amp;amp; Learnings
+&lt;/h2>&lt;h3 id="current-stack">&lt;a href="#current-stack" class="header-anchor">&lt;/a>Current Stack
+&lt;/h3>&lt;p>I&amp;rsquo;m currently working with:&lt;/p>
+&lt;ul>
+&lt;li>Backend: Go, Python&lt;/li>
+&lt;li>Frontend: Duh!&lt;/li>
+&lt;li>DevOps: Docker, Kubernetes, o11y&lt;/li>
+&lt;li>Cloud: AWS&lt;/li>
+&lt;/ul>
+&lt;h3 id="recent-discoveries">&lt;a href="#recent-discoveries" class="header-anchor">&lt;/a>Recent Discoveries
+&lt;/h3>&lt;p>Found some amazing tools that have revolutionized my workflow:&lt;/p>
+&lt;ul>
+&lt;li>Neovim for lightning-fast code editing&lt;/li>
+&lt;li>Docker Compose for local development&lt;/li>
+&lt;li>GitHub Copilot for pair programming with AI&lt;/li>
+&lt;/ul>
+&lt;h2 id="weekly-tech-tips">&lt;a href="#weekly-tech-tips" class="header-anchor">&lt;/a>Weekly Tech Tips
+&lt;/h2>&lt;p>Here&amp;rsquo;s a useful Git trick I discovered recently:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">git config --global alias.undo &lt;span class="s1">&amp;#39;reset --soft HEAD~1&amp;#39;&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Now you can undo your last commit with &lt;code>git undo&lt;/code>!&lt;/p>
+&lt;h2 id="gaming-setup">&lt;a href="#gaming-setup" class="header-anchor">&lt;/a>Gaming Setup
+&lt;/h2>&lt;p>My current battle station:&lt;/p>
+&lt;ul>
+&lt;li>CPU: AMD Ryzen 9 3900x&lt;/li>
+&lt;li>GPU: NVIDIA RTX 4090&lt;/li>
+&lt;li>RAM: 64GB DDR4&lt;/li>
+&lt;li>Display: 27&amp;quot; 1440p 144Hz and 4K OLED 55&amp;quot;&lt;/li>
+&lt;/ul>
+&lt;h2 id="whats-next">&lt;a href="#whats-next" class="header-anchor">&lt;/a>What&amp;rsquo;s Next?
+&lt;/h2>&lt;p>Stay tuned for:&lt;/p>
+&lt;ul>
+&lt;li>Deep dives into system design&lt;/li>
+&lt;li>Game performance optimization guides&lt;/li>
+&lt;li>Weekly coding challenges&lt;/li>
+&lt;li>Gaming achievement guides&lt;/li>
+&lt;/ul>
+&lt;hr>
+&lt;blockquote>
+&lt;p>Photo by &lt;a class="link" href="https://unsplash.com/@codioful" target="_blank" rel="noopener"
+>Codioful&lt;/a> on &lt;a class="link" href="https://unsplash.com/photos/WDSN62Qdxuk" target="_blank" rel="noopener"
+>Unsplash&lt;/a>&lt;/p>&lt;/blockquote></description></item></channel></rss>
