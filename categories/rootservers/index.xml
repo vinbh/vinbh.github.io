@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>RootServers on vinbh</title><link>https://vinbh.github.io/categories/rootservers/</link><description>Recent content in RootServers on vinbh</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Mon, 10 Mar 2025 00:00:00 +0000</lastBuildDate><atom:link href="https://vinbh.github.io/categories/rootservers/index.xml" rel="self" type="application/rss+xml"/><item><title>The Myth of the 13 DNS Root Server Addresses</title><link>https://vinbh.github.io/p/the-myth-of-the-13-dns-root-server-addresses/</link><pubDate>Mon, 10 Mar 2025 00:00:00 +0000</pubDate><guid>https://vinbh.github.io/p/the-myth-of-the-13-dns-root-server-addresses/</guid><description>&lt;h1 id="why-are-there-only-13-dns-root-server-addresses"&gt;&lt;a href="#why-are-there-only-13-dns-root-server-addresses" class="header-anchor"&gt;&lt;/a&gt;Why Are There Only 13 DNS Root Server Addresses?
+&lt;/h1&gt;&lt;h2 id="introduction"&gt;&lt;a href="#introduction" class="header-anchor"&gt;&lt;/a&gt;Introduction
+&lt;/h2&gt;&lt;p&gt;If you’re reading this blog post, chances are you’re already reaping the benefits of a highly distributed system for resolving domain names. Every time you type in a website address or click a link, the Domain Name System (DNS) springs into action, translating your friendly “www” addresses into numerical IP addresses. But you might have come across a puzzling fact: &lt;strong&gt;there are only 13 DNS root server addresses.&lt;/strong&gt; Let’s explore why that is and bust a common misconception!&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;**“Why are there only 13 DNS root server addresses?&lt;br&gt;
+A common misconception is that there are only 13 root servers in the world. In reality there are many more, but still only 13 IP addresses used to query the different root server networks. Limitations in the original architecture of DNS require there to be a maximum of 13 server addresses in the root zone. In the early days of the Internet, there was only one server for each of the 13 IP addresses, most of which were located in the United States.&lt;/p&gt;
+&lt;p&gt;Today each of the 13 IP addresses has several servers, which use Anycast routing to distribute requests based on load and proximity. Right now there are over 600 different DNS root servers distributed across every populated continent on earth.”**&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id="the-myth-of-the-13-servers"&gt;&lt;a href="#the-myth-of-the-13-servers" class="header-anchor"&gt;&lt;/a&gt;The Myth of the 13 Servers
+&lt;/h2&gt;&lt;p&gt;One of the most common internet myths is that there are only 13 &lt;em&gt;physical&lt;/em&gt; DNS root servers worldwide. Imagine if that were true—nearly the entire planet’s DNS lookups would be handled by a mere handful of machines! That could be a bit scary, like having only 13 vending machines for coffee for everyone on Earth. (We’d never get caffeinated enough!)&lt;/p&gt;
+&lt;p&gt;In truth, the number 13 corresponds to &lt;strong&gt;13 unique IP addresses&lt;/strong&gt;, not 13 actual physical servers.&lt;/p&gt;
+&lt;h2 id="the-historical-reason"&gt;&lt;a href="#the-historical-reason" class="header-anchor"&gt;&lt;/a&gt;The Historical Reason
+&lt;/h2&gt;&lt;p&gt;When DNS was first developed, its architecture was limited in how many name server addresses could be listed in the root zone. The engineers decided on a maximum of 13, due to technical constraints related to:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Protocol Limitations:&lt;/strong&gt; Early DNS packets had size limitations, affecting how many root server entries could be included.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Network Efficiency:&lt;/strong&gt; DNS was originally designed for a smaller internet, not the mega-network we use today.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id="anycast-magic"&gt;&lt;a href="#anycast-magic" class="header-anchor"&gt;&lt;/a&gt;Anycast Magic
+&lt;/h2&gt;&lt;p&gt;Fast-forward to the modern era, and we have &lt;strong&gt;Anycast routing&lt;/strong&gt; to save the day. The idea behind Anycast is delightfully simple yet highly effective:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Multiple Servers, One IP&lt;/strong&gt;: You have multiple servers around the globe, but each shares the &lt;em&gt;same&lt;/em&gt; IP address.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Geographical Proximity&lt;/strong&gt;: Internet traffic is routed automatically to the nearest or least busy server using this shared IP.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Load Balancing&lt;/strong&gt;: The load is spread among many servers, increasing reliability and speed.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Thanks to Anycast, each of those 13 “root server addresses” can represent a cluster of physical servers scattered across multiple continents. As of now, there are &lt;strong&gt;over 600&lt;/strong&gt; physically distinct servers operating under those 13 addresses, ensuring global coverage and robust DNS resolution.&lt;/p&gt;
+&lt;h2 id="why-this-matters"&gt;&lt;a href="#why-this-matters" class="header-anchor"&gt;&lt;/a&gt;Why This Matters
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Resilience&lt;/strong&gt;: With so many distributed servers, DNS remains stable even if some servers go down.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Speed&lt;/strong&gt;: You’re usually routed to the nearest root server, which means faster website resolutions.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Scalability&lt;/strong&gt;: More servers can always be added to the clusters under the same IP to handle increased global internet usage.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="fun-fact"&gt;&lt;a href="#fun-fact" class="header-anchor"&gt;&lt;/a&gt;Fun Fact
+&lt;/h2&gt;&lt;p&gt;You might stumble upon root servers named with letters—like &lt;code&gt;A&lt;/code&gt;, &lt;code&gt;B&lt;/code&gt;, &lt;code&gt;C&lt;/code&gt;, etc. These labels correspond to each of the 13 IP addresses. For example, “A” is one of the addresses (named &lt;code&gt;a.root-servers.net&lt;/code&gt;), and it has multiple physical servers worldwide.&lt;/p&gt;
+&lt;h2 id="final-thoughts"&gt;&lt;a href="#final-thoughts" class="header-anchor"&gt;&lt;/a&gt;Final Thoughts
+&lt;/h2&gt;&lt;p&gt;So, the next time you hear someone say there are only 13 DNS root servers, feel free to put on your DNS superhero cape and explain the real story. &lt;strong&gt;The “13” refers to IP addresses, not the number of physical machines!&lt;/strong&gt; In reality, these IP addresses direct you to hundreds of actual servers via the Anycast wonder.&lt;/p&gt;
+&lt;p&gt;If you’re ever curious about where your nearest root server is located, there are DNS tools out there to show your DNS route. It’s a neat exercise in seeing how globally connected the internet really is—even behind the scenes.&lt;/p&gt;
+&lt;hr&gt;</description></item></channel></rss>
